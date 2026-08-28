@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from './db.js';
 import { countCommits, pollOnce } from './github.js';
-import { fetchTeamMetrics } from './devin.js';
+import { fetchSelf, fetchTeamMetrics } from './devin.js';
 import { readIngestLog, clearIngestLog } from './ingestLog.js';
 
 const router = Router();
@@ -15,7 +15,7 @@ function intOr(v, fallback = null) {
 
 function withoutDevinKey(team) {
   const { devin_api_key, ...safe } = team;
-  return safe;
+  return { ...safe, has_devin: !!devin_api_key };
 }
 
 for (const p of ['teamId', 'deviceId', 'memberId', 'lapId']) {
@@ -372,11 +372,20 @@ router.post('/events/:slug/teams/:teamId/devin', async (req, res) => {
   if (!event.rows[0]) return res.status(404).json({ error: 'no such event' });
   const orgId = req.body.orgId?.toString().trim() || null;
   const apiKey = req.body.apiKey?.toString().trim() || null;
+  let resolvedOrgId = orgId;
+  if (apiKey && !resolvedOrgId) {
+    try {
+      const self = await fetchSelf(apiKey);
+      resolvedOrgId = self.org_id;
+    } catch {
+      return res.status(400).json({ ok: false, error: 'invalid key' });
+    }
+  }
   const { rows } = await pool.query(
     `UPDATE teams SET devin_org_id = $1, devin_api_key = $2, devin_status = NULL
       WHERE id = $3 AND event_id = $4
       RETURNING devin_api_key`,
-    [orgId, apiKey, req.params.teamId, event.rows[0].id]
+    [resolvedOrgId, apiKey, req.params.teamId, event.rows[0].id]
   );
   if (!rows[0]) return res.status(404).json({ error: 'no such team' });
   res.json({ ok: true, hasKey: !!rows[0].devin_api_key });

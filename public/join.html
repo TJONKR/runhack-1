@@ -66,6 +66,10 @@
       <label>Team GitHub repo (public — commits count toward your score)</label>
       <input id="repo" placeholder="https://github.com/you/project" autocomplete="off" inputmode="url">
     </div>
+    <div id="devinWrap" style="display:none">
+      <label>Team Devin API key (cog_… — one per team, from Settings → API)</label>
+      <input id="devinKey" type="password" placeholder="cog_…" autocomplete="off">
+    </div>
     <button onclick="register()">Join the team →</button>
     <button class="secondary" onclick="openDeviceStep()">Already joined? Set up tracking on this phone</button>
     <p class="muted">Register once. Tracking is per phone — set it up next, and pass the phone (or
@@ -154,6 +158,7 @@ async function init() {
   const updateRepoField = () => {
     const team = info.teams.find((t) => String(t.id) === sel.value);
     document.getElementById('repoWrap').style.display = team && !team.has_repo ? 'block' : 'none';
+    document.getElementById('devinWrap').style.display = team && !team.has_devin ? 'block' : 'none';
   };
   sel.onchange = updateRepoField;
   updateRepoField();
@@ -164,13 +169,20 @@ async function register() {
   const name = document.getElementById('name').value.trim();
   if (!name) return alert('Enter your name');
   const repoUrl = document.getElementById('repo').value.trim() || undefined;
+  const devinKey = document.getElementById('devinKey').value.trim();
+  const body = { teamId: teamId(), name, repoUrl };
+  if (devinKey) body.devinKey = devinKey;
   let r;
   try { r = await fetch(`/api/${slug}/members`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ teamId: teamId(), name, repoUrl }),
+    body: JSON.stringify(body),
   }); } catch { return alert('No connection — check signal and try again.'); }
-  if (!r.ok) return alert('Registration failed: ' + (await r.text()));
+  if (!r.ok) {
+    const text = await r.text();
+    try { return alert('Registration failed: ' + JSON.parse(text).error); }
+    catch { return alert('Registration failed: ' + text); }
+  }
   newMemberId = (await r.json()).memberId;
   openDeviceStep();
 }

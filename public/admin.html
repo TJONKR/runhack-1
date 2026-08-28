@@ -746,6 +746,10 @@ function renderTeams() {
         onchange="patchTeam(${t.id}, { repoUrl: this.value })" style="flex:1;font-size:12px">
         ${repoPill(t)}
         <button onclick="checkRepo(${t.id}, this)" title="verify the repo is public and reachable, refresh commit count">test</button></div>
+      <div class="row"><input type="password"
+        placeholder="${t.has_devin ? (t.devin_status === 'connected' ? 'cog_… (connected)' : t.devin_status === 'error' ? 'cog_… (error — re-enter)' : 'cog_… (set)') : 'cog_… (not set)'}"
+        autocomplete="off" onchange="saveDevin(${t.id}, this.value)" style="flex:1;font-size:12px">
+        <button onclick="checkDevin(${t.id}, this)" title="verify the Devin API key and refresh usage metrics">Test Devin</button></div>
       <div class="row" style="font-size:12px">
         <span class="muted">links:</span>
         <button onclick="copyText('${location.origin}/${cur.slug}/join?team=${t.id}', this)">copy join link</button>
@@ -768,6 +772,29 @@ async function checkRepo(teamId, btn) {
   const v = await r.json();
   if (v.status === 'not_set') alert('No repo set for this team yet.');
   else if (v.status === 'error') alert('Could not reach that repo — is it public and spelled right?');
+  openEvent(cur.slug, curTab);
+}
+async function saveDevin(teamId, apiKey) {
+  const r = await fetch(`/api/admin/events/${cur.slug}/teams/${teamId}/devin`, {
+    method: 'POST', headers: H(), body: JSON.stringify({ apiKey }),
+  });
+  const v = await r.json();
+  if (!r.ok || v.ok === false) alert(v.error || 'Could not save Devin API key.');
+  openEvent(cur.slug, curTab);
+}
+async function checkDevin(teamId, btn) {
+  btn.textContent = 'testing…';
+  const r = await fetch(`/api/admin/events/${cur.slug}/teams/${teamId}/check-devin`, {
+    method: 'POST', headers: H(),
+  });
+  const v = await r.json();
+  if (v.status === 'connected') {
+    alert(`Devin connected: ${v.sessions} sessions · ${v.msgs} messages · ${v.acus} ACUs · ${v.prsMerged}/${v.prsOpen} PRs`);
+  } else if (v.status === 'not_set') {
+    alert('No Devin API key set for this team yet.');
+  } else {
+    alert('Could not reach Devin with this API key.');
+  }
   openEvent(cur.slug, curTab);
 }
 async function patchTeam(teamId, body) {

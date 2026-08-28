@@ -76,11 +76,13 @@ with the `ViewOrgSessions` permission. The server polls the Devin v3
 organization-scoped sessions and messages endpoints every 60 seconds, limited
 to the event window.
 
-The live board shows each team's session count, active sessions, message
-count, ACUs consumed, and opened/merged PR counts. Keys are stored server-side
-and are never exposed by any endpoint. Admins can set or clear credentials with
-`POST /api/admin/events/:slug/teams/:teamId/devin` using `{orgId, apiKey}`,
-and test them immediately with
+The first runner can paste the team's key on the join page; the server
+validates it through `/v3/self` and resolves the organization automatically.
+The live board shows each team's session count, active sessions, message count,
+ACUs consumed, and opened/merged PR counts. Keys are stored server-side and
+are never exposed by any endpoint. Admins can set or clear credentials with
+`POST /api/admin/events/:slug/teams/:teamId/devin` using `{apiKey}` (or
+`{orgId, apiKey}`), and test them immediately with
 `POST /api/admin/events/:slug/teams/:teamId/check-devin`.
 
 ## URLs

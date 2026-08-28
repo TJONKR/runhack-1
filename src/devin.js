@@ -13,6 +13,10 @@ async function devinFetch(apiKey, path) {
   return res.json();
 }
 
+export async function fetchSelf(apiKey) {
+  return devinFetch(apiKey, '/v3/self');
+}
+
 export async function listSessions(apiKey, orgId, sinceDate) {
   const sessions = [];
   let after = null;
