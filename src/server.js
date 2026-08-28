@@ -7,6 +7,7 @@ import adminRouter from './admin.js';
 import apiRouter from './api.js';
 import { ingestHandler } from './ingest.js';
 import { startGithubPoller } from './github.js';
+import { startDevinPoller } from './devin.js';
 import { pushIngestLog } from './ingestLog.js';
 import QRCode from 'qrcode';
 
@@ -138,4 +139,5 @@ app.use((err, req, res, next) => {
 const port = process.env.PORT || 3000;
 await initDb();
 startGithubPoller();
+startDevinPoller();
 app.listen(port, () => console.log(`runhack server on :${port}`));

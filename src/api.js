@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { pool, eventConfig, eventStatus, teamScore } from './db.js';
 import { parseRepo } from './github.js';
+import { fetchSelf } from './devin.js';
 
 const router = Router();
 
@@ -60,7 +61,9 @@ router.get('/:slug/info', async (req, res) => {
   );
   if (!rows[0]) return res.status(404).json({ error: 'no such event' });
   const teams = await pool.query(
-    "SELECT id, name, (repo_url IS NOT NULL AND repo_url <> '') AS has_repo FROM teams WHERE event_id = $1 ORDER BY name",
+    `SELECT id, name, (repo_url IS NOT NULL AND repo_url <> '') AS has_repo,
+            (devin_api_key IS NOT NULL AND devin_api_key <> '') AS has_devin
+       FROM teams WHERE event_id = $1 ORDER BY name`,
     [rows[0].id]
   );
   res.json({ slug: rows[0].slug, name: rows[0].name, teams: teams.rows });
@@ -76,11 +79,22 @@ router.post('/:slug/members', publicWriteLimit, async (req, res) => {
   const { name } = req.body;
   if (!teamId || !name?.trim()) return res.status(400).json({ error: 'teamId and name required' });
 
-  const team = await pool.query('SELECT id FROM teams WHERE id = $1 AND event_id = $2', [
+  const team = await pool.query('SELECT id, devin_api_key FROM teams WHERE id = $1 AND event_id = $2', [
     teamId,
     event.id,
   ]);
   if (!team.rows[0]) return res.status(404).json({ error: 'no such team in this event' });
+
+  const devinKey = typeof req.body.devinKey === 'string' ? req.body.devinKey.trim() : '';
+  let devinOrgId = null;
+  if (devinKey && !team.rows[0].devin_api_key) {
+    try {
+      const self = await fetchSelf(devinKey);
+      devinOrgId = self.org_id;
+    } catch {
+      return res.status(400).json({ error: 'Devin API key rejected by api.devin.ai — check it and try again' });
+    }
+  }
 
   // First runner to supply a repo sets the team's; after that it's admin-only.
   const { repoUrl } = req.body;
@@ -89,6 +103,13 @@ router.post('/:slug/members', publicWriteLimit, async (req, res) => {
     await pool.query(
       "UPDATE teams SET repo_url = $1 WHERE id = $2 AND (repo_url IS NULL OR repo_url = '')",
       [repoUrl.trim(), teamId]
+    );
+  }
+  if (devinKey && !team.rows[0].devin_api_key) {
+    await pool.query(
+      `UPDATE teams SET devin_org_id = $1, devin_api_key = $2, devin_status = NULL
+        WHERE id = $3 AND (devin_api_key IS NULL OR devin_api_key = '')`,
+      [devinOrgId, devinKey, teamId]
     );
   }
 
@@ -271,6 +292,8 @@ router.get('/:slug/board', async (req, res) => {
   const teams = await pool.query(
     `SELECT t.id, t.name, t.repo_url, t.commit_count, t.commit_override, t.score_adjust,
             t.last_commit_msg, t.last_commit_author, t.last_commit_at, t.committers,
+            t.devin_sessions, t.devin_active, t.devin_msgs, t.devin_prs_open,
+            t.devin_prs_merged, t.devin_acus, t.devin_checked_at,
             COALESCE(dm.name, ad.name, CASE WHEN ad.id IS NULL THEN NULL ELSE 'Team device' END) AS runner_name,
             ad.last_fix AS runner_last_fix,
             ll.seconds AS last_lap_s, ll.counted AS last_lap_valid, ll.reject_reason AS last_lap_reason,
@@ -319,6 +342,16 @@ router.get('/:slug/board', async (req, res) => {
         km,
         commits,
         repo: t.repo_url || null,
+        devin: t.devin_checked_at
+          ? {
+              sessions: Number(t.devin_sessions),
+              active: Number(t.devin_active),
+              msgs: Number(t.devin_msgs),
+              prsOpen: Number(t.devin_prs_open),
+              prsMerged: Number(t.devin_prs_merged),
+              acus: Number(t.devin_acus),
+            }
+          : null,
         committers: t.committers ?? null,
         lastCommit: t.last_commit_msg
           ? {

@@ -95,6 +95,16 @@ export async function initDb() {
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS last_commit_msg text;
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS last_commit_author text;
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS committers integer;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_org_id text;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_api_key text;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_sessions integer NOT NULL DEFAULT 0;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_active integer NOT NULL DEFAULT 0;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_msgs integer NOT NULL DEFAULT 0;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_prs_open integer NOT NULL DEFAULT 0;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_prs_merged integer NOT NULL DEFAULT 0;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_acus real NOT NULL DEFAULT 0;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_checked_at timestamptz;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_status text;
     ALTER TABLE laps ADD COLUMN IF NOT EXISTS manual boolean NOT NULL DEFAULT false;
     ALTER TABLE laps ALTER COLUMN member_id DROP NOT NULL;
     ALTER TABLE laps ADD COLUMN IF NOT EXISTS entry_seconds real;
