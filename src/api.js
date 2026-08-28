@@ -271,6 +271,8 @@ router.get('/:slug/board', async (req, res) => {
   const teams = await pool.query(
     `SELECT t.id, t.name, t.repo_url, t.commit_count, t.commit_override, t.score_adjust,
             t.last_commit_msg, t.last_commit_author, t.last_commit_at, t.committers,
+            t.devin_sessions, t.devin_active, t.devin_msgs, t.devin_prs_open,
+            t.devin_prs_merged, t.devin_acus, t.devin_checked_at,
             COALESCE(dm.name, ad.name, CASE WHEN ad.id IS NULL THEN NULL ELSE 'Team device' END) AS runner_name,
             ad.last_fix AS runner_last_fix,
             ll.seconds AS last_lap_s, ll.counted AS last_lap_valid, ll.reject_reason AS last_lap_reason,
@@ -319,6 +321,16 @@ router.get('/:slug/board', async (req, res) => {
         km,
         commits,
         repo: t.repo_url || null,
+        devin: t.devin_checked_at
+          ? {
+              sessions: Number(t.devin_sessions),
+              active: Number(t.devin_active),
+              msgs: Number(t.devin_msgs),
+              prsOpen: Number(t.devin_prs_open),
+              prsMerged: Number(t.devin_prs_merged),
+              acus: Number(t.devin_acus),
+            }
+          : null,
         committers: t.committers ?? null,
         lastCommit: t.last_commit_msg
           ? {

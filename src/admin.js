@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from './db.js';
 import { countCommits, pollOnce } from './github.js';
+import { fetchTeamMetrics } from './devin.js';
 import { readIngestLog, clearIngestLog } from './ingestLog.js';
 
 const router = Router();
@@ -12,6 +13,10 @@ function intOr(v, fallback = null) {
   return Number.isInteger(n) && Math.abs(n) < 2_000_000_000 ? n : fallback;
 }
 
+function withoutDevinKey(team) {
+  const { devin_api_key, ...safe } = team;
+  return safe;
+}
 
 for (const p of ['teamId', 'deviceId', 'memberId', 'lapId']) {
   router.param(p, (req, res, next, v) => (/^\d{1,9}$/.test(v) ? next() : res.status(404).json({ error: 'not found' })));
@@ -129,7 +134,7 @@ router.get('/events/:slug', async (req, res) => {
        FROM teams t WHERE t.event_id = $1 ORDER BY t.name`,
     [rows[0].id]
   );
-  res.json({ ...rows[0], teams: teams.rows });
+  res.json({ ...rows[0], teams: teams.rows.map(withoutDevinKey) });
 });
 
 router.post('/events/:slug/teams', async (req, res) => {
@@ -142,7 +147,7 @@ router.post('/events/:slug/teams', async (req, res) => {
      ON CONFLICT (event_id, name) DO UPDATE SET name = $2 RETURNING *`,
     [rows[0].id, name]
   );
-  res.json(team.rows[0]);
+  res.json(withoutDevinKey(team.rows[0]));
 });
 
 // Event lifecycle: start_now / end_now / pause / resume.
@@ -357,7 +362,24 @@ router.patch('/events/:slug/teams/:teamId', async (req, res) => {
     vals
   );
   if (!rows[0]) return res.status(404).json({ error: 'no such team' });
-  res.json(rows[0]);
+  res.json(withoutDevinKey(rows[0]));
+});
+
+// Store or clear a team's Devin organization credentials. API keys remain
+// server-side and are intentionally absent from every response.
+router.post('/events/:slug/teams/:teamId/devin', async (req, res) => {
+  const event = await pool.query('SELECT id FROM events WHERE slug = $1', [req.params.slug]);
+  if (!event.rows[0]) return res.status(404).json({ error: 'no such event' });
+  const orgId = req.body.orgId?.toString().trim() || null;
+  const apiKey = req.body.apiKey?.toString().trim() || null;
+  const { rows } = await pool.query(
+    `UPDATE teams SET devin_org_id = $1, devin_api_key = $2, devin_status = NULL
+      WHERE id = $3 AND event_id = $4
+      RETURNING devin_api_key`,
+    [orgId, apiKey, req.params.teamId, event.rows[0].id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'no such team' });
+  res.json({ ok: true, hasKey: !!rows[0].devin_api_key });
 });
 
 // Test a team's GitHub connection right now: reachable, public, and counts
@@ -384,6 +406,38 @@ router.post('/events/:slug/teams/:teamId/check-repo', async (req, res) => {
     [status, count, t.id]
   );
   res.json({ status, commits: count });
+});
+
+// Test a team's Devin connection right now and persist the resulting metrics.
+router.post('/events/:slug/teams/:teamId/check-devin', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT t.id, t.devin_org_id, t.devin_api_key, e.start_at, t.created_at
+       FROM teams t JOIN events e ON e.id = t.event_id
+      WHERE t.id = $1 AND e.slug = $2`,
+    [req.params.teamId, req.params.slug]
+  );
+  const t = rows[0];
+  if (!t) return res.status(404).json({ error: 'no such team' });
+  if (!t.devin_org_id || !t.devin_api_key) return res.json({ status: 'not_set' });
+  try {
+    const metrics = await fetchTeamMetrics(
+      t.devin_api_key,
+      t.devin_org_id,
+      t.start_at || t.created_at
+    );
+    await pool.query(
+      `UPDATE teams SET devin_sessions = $1, devin_active = $2, devin_msgs = $3,
+              devin_prs_open = $4, devin_prs_merged = $5, devin_acus = $6,
+              devin_checked_at = now(), devin_status = 'connected'
+        WHERE id = $7`,
+      [metrics.sessions, metrics.active, metrics.msgs, metrics.prsOpen, metrics.prsMerged, metrics.acus, t.id]
+    );
+    res.json({ status: 'connected', ...metrics });
+  } catch (err) {
+    console.error('devin check failed for team', t.id, err.message);
+    await pool.query("UPDATE teams SET devin_status = 'error' WHERE id = $1", [t.id]);
+    res.json({ status: 'error' });
+  }
 });
 
 // ---- Member surgery: everything a marshal might need to fix on the day ----

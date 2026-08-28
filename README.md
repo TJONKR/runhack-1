@@ -68,6 +68,21 @@ keeps 30 repos at ~720 req/hr vs the token's 5,000 limit). Set
 GitHub's 60 req/hr IP limit breaks at even a handful of teams. The admin
 "test" button on a team's repo refreshes it instantly.
 
+## Devin integration
+
+Each team supplies its Devin organization ID and a service-user API key. The
+key starts with `cog_`; create it in Devin under **Settings → Service users**
+with the `ViewOrgSessions` permission. The server polls the Devin v3
+organization-scoped sessions and messages endpoints every 60 seconds, limited
+to the event window.
+
+The live board shows each team's session count, active sessions, message
+count, ACUs consumed, and opened/merged PR counts. Keys are stored server-side
+and are never exposed by any endpoint. Admins can set or clear credentials with
+`POST /api/admin/events/:slug/teams/:teamId/devin` using `{orgId, apiKey}`,
+and test them immediately with
+`POST /api/admin/events/:slug/teams/:teamId/check-devin`.
+
 ## URLs
 
 | URL | What |
