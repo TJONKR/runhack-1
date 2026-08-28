@@ -66,6 +66,17 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS points_member_time ON points (member_id, fixed_at);
     CREATE INDEX IF NOT EXISTS points_device_time ON points (device_id, fixed_at);
 
+    CREATE TABLE IF NOT EXISTS infractions (
+      id          serial PRIMARY KEY,
+      event_id    integer NOT NULL,
+      team_id     integer NOT NULL,
+      started_at  timestamptz NOT NULL,
+      ended_at    timestamptz,
+      seconds     real,
+      dismissed   boolean NOT NULL DEFAULT false
+    );
+    CREATE INDEX IF NOT EXISTS infractions_team ON infractions (event_id, team_id);
+
     CREATE TABLE IF NOT EXISTS devices (
       id          serial PRIMARY KEY,
       event_id    integer NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -182,6 +193,13 @@ export function eventConfig(event) {
     // timed segment), 'gate' or 'entry_entry' (full lap, window over lapM).
     // All three are recorded regardless; this only picks the official one.
     officialTiming: c.officialTiming ?? 'exit_entry',
+    // "nobody sits down" monitor: a team with no device moving at running
+    // speed for longer than idleGraceS gets an infraction logged. Penalties
+    // are tallied from the log at the end (count + total idle seconds).
+    idleMonitor: c.idleMonitor ?? true,
+    idleGraceS: c.idleGraceS ?? 15,
+    coverageStaleS: c.coverageStaleS ?? 35, // fix older than this = not on track
+    idleSpeedMs: c.idleSpeedMs ?? 1.5, // below this = not running (walking ~1.4)
     zones: event.zones || [],
   };
 }

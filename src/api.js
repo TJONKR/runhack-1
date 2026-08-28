@@ -276,7 +276,9 @@ router.get('/:slug/board', async (req, res) => {
             ll.seconds AS last_lap_s, ll.counted AS last_lap_valid, ll.reject_reason AS last_lap_reason,
             l.avg_s AS avg_lap_s,
             COALESCE(l.valid, 0) AS valid_laps, COALESCE(l.invalid, 0) AS invalid_laps,
-            COALESCE(l.valid_then, 0) AS valid_laps_then
+            COALESCE(l.valid_then, 0) AS valid_laps_then,
+            COALESCE(inf.n, 0) AS infractions, COALESCE(inf.idle_s, 0) AS idle_s,
+            COALESCE(inf.open_n, 0) > 0 AS idle_now
        FROM teams t
        LEFT JOIN devices ad ON ad.id = t.active_device_id
        LEFT JOIN members dm ON dm.id = ad.member_id
@@ -288,6 +290,11 @@ router.get('/:slug/board', async (req, res) => {
                 count(*) FILTER (WHERE counted AND finished_at < now() - interval '10 minutes') AS valid_then
            FROM laps WHERE event_id = $1 GROUP BY team_id
        ) l ON l.team_id = t.id
+       LEFT JOIN (
+         SELECT team_id, count(*) AS n, count(*) FILTER (WHERE ended_at IS NULL) AS open_n,
+                coalesce(sum(coalesce(seconds, extract(epoch FROM now() - started_at))), 0) AS idle_s
+           FROM infractions WHERE event_id = $1 AND NOT dismissed GROUP BY team_id
+       ) inf ON inf.team_id = t.id
        LEFT JOIN LATERAL (
          SELECT seconds, counted, reject_reason FROM laps
           WHERE team_id = t.id ORDER BY finished_at DESC LIMIT 1
@@ -351,6 +358,9 @@ router.get('/:slug/board', async (req, res) => {
             ? Math.round(t.last_lap_s / (paceDistM / 1000))
             : null,
         lastPingAgoS: lastFixAgoS,
+        infractions: Number(t.infractions),
+        idleSeconds: Math.round(Number(t.idle_s)),
+        idleNow: t.idle_now,
       };
     })
     .sort((a, b) => b.score - a.score || b.km - a.km || a.team.localeCompare(b.team));

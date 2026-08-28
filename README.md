@@ -52,6 +52,24 @@ track GPS, and the official one is a per-event config switch (`officialTiming`):
 Calibrate `min/max lap s` to whichever distance the chosen method measures
 (e.g. 7'00"/km over 350m segment = 147s, over the full 400m = 168s).
 
+## Idle monitor ("nobody sits down")
+
+Every 5s the server checks each team: is **anyone** on the team moving at
+running speed? A device covers its team when its last fix is fresh
+(`coverageStaleS`, default 35s) and at running speed (`idleSpeedMs`, default
+1.5 m/s; a fix without speed counts while fresh). When no device covers the
+team for longer than `idleGraceS` (default 15s) an **infraction** opens —
+backdated to the moment the grace ran out — and closes when someone runs
+again. Infractions only accrue while the event is `live`.
+
+The board shows per team: infraction count, total idle seconds, and a live
+"SITTING" flash while a gap is open. Penalties are the organisers' call —
+the raw log (start/end/seconds per infraction) is kept for the final tally.
+Admin: `GET /api/admin/events/{slug}/teams/{id}/infractions` to review,
+`PATCH /api/admin/infractions/{id}` `{"dismissed":true}` to void one
+(GPS dropout, agreed dispute); dismissed infractions leave the board totals.
+Set `idleMonitor: false` in event config to turn it off.
+
 ## GitHub integration
 
 Each team connects one **public** repo (first runner sets it on the join

@@ -59,6 +59,9 @@
   td.score { font-weight: 900; color: var(--sky); font-size: 24px; }
   td.km { color: var(--orange); font-weight: 700; }
   .runner { color: rgba(244,243,239,0.65); font-size: 15px; }
+  .idle-now { color: #ff5a5a; font-weight: 700; animation: blink 1s step-end infinite; }
+  .idle-count { color: #ffb020; font-weight: 600; }
+  @keyframes blink { 50% { opacity: 0.25; } }
   .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
   .running { background: #4ade80; box-shadow: 0 0 8px #4ade80; } .stopped { background: var(--gold); } .idle { background: #333f52; }
   .lap-valid { color: #4ade80; } .lap-invalid { color: var(--orange); }
@@ -87,7 +90,8 @@
               display: inline-block; vertical-align: middle; }
     th:nth-child(6), td:nth-child(6),
     th:nth-child(8), td:nth-child(8),
-    th:nth-child(9), td:nth-child(9) { display: none; }
+    th:nth-child(9), td:nth-child(9),
+    th:nth-child(10), td:nth-child(10) { display: none; }
     td.score { font-size: 16px; }
     .runner { font-size: 12px; max-width: 56px; overflow: hidden; text-overflow: ellipsis;
               white-space: nowrap; display: inline-block; vertical-align: middle; }
@@ -136,6 +140,7 @@
       <th></th><th>Team</th><th>Runner</th>
       <th class="num">Laps</th><th class="num">KM</th><th class="num">Commits</th>
       <th class="num">Score</th><th class="num">Last lap</th><th class="num">Avg lap</th>
+      <th class="num" title="Nobody-sits-down violations: >15s with no one running">Idle</th>
     </tr></thead>
     <tbody id="rows"></tbody>
   </table>
@@ -189,6 +194,11 @@ async function tick() {
       const avgCell = t.avgLap
         ? `<span>${t.avgLap.seconds}s</span><span class="lap-reason">${fmtPace(t.avgLap.paceSPerKm)}</span>`
         : '—';
+      const idleCell = t.idleNow
+        ? `<span class="idle-now">● SITTING</span><span class="lap-reason">${t.infractions}× · ${t.idleSeconds}s</span>`
+        : t.infractions > 0
+          ? `<span class="idle-count">${t.infractions}×</span><span class="lap-reason">${t.idleSeconds}s idle</span>`
+          : '—';
       const commit = t.lastCommit
         ? `<span class="commitline" title="${esc(t.lastCommit.author || '')}">↑ ${esc(t.lastCommit.message)} · ${fmtAgo(t.lastCommit.agoS)}</span>`
         : '';
@@ -202,6 +212,7 @@ async function tick() {
         <td class="num score">${t.score}</td>
         <td class="num">${lapCell}</td>
         <td class="num">${avgCell}</td>
+        <td class="num">${idleCell}</td>
       </tr>`;
     }).join('');
   } catch {}
