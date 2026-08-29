@@ -66,6 +66,17 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS points_member_time ON points (member_id, fixed_at);
     CREATE INDEX IF NOT EXISTS points_device_time ON points (device_id, fixed_at);
 
+    CREATE TABLE IF NOT EXISTS infractions (
+      id          serial PRIMARY KEY,
+      event_id    integer NOT NULL,
+      team_id     integer NOT NULL,
+      started_at  timestamptz NOT NULL,
+      ended_at    timestamptz,
+      seconds     real,
+      dismissed   boolean NOT NULL DEFAULT false
+    );
+    CREATE INDEX IF NOT EXISTS infractions_team ON infractions (event_id, team_id);
+
     CREATE TABLE IF NOT EXISTS devices (
       id          serial PRIMARY KEY,
       event_id    integer NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -95,6 +106,10 @@ export async function initDb() {
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS last_commit_msg text;
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS last_commit_author text;
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS committers integer;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_org_id text;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_api_key text;
+    ALTER TABLE infractions ADD COLUMN IF NOT EXISTS prompt_count integer NOT NULL DEFAULT 0;
+    ALTER TABLE infractions ADD COLUMN IF NOT EXISTS prompt_log jsonb NOT NULL DEFAULT '[]';
     ALTER TABLE laps ADD COLUMN IF NOT EXISTS manual boolean NOT NULL DEFAULT false;
     ALTER TABLE laps ALTER COLUMN member_id DROP NOT NULL;
     ALTER TABLE laps ADD COLUMN IF NOT EXISTS entry_seconds real;
@@ -182,6 +197,13 @@ export function eventConfig(event) {
     // timed segment), 'gate' or 'entry_entry' (full lap, window over lapM).
     // All three are recorded regardless; this only picks the official one.
     officialTiming: c.officialTiming ?? 'exit_entry',
+    // "nobody sits down" monitor: a team with no device moving at running
+    // speed for longer than idleGraceS gets a gap logged. Devin prompts during
+    // that gap are counted separately as prompt-backed infractions.
+    idleMonitor: c.idleMonitor ?? true,
+    idleGraceS: c.idleGraceS ?? 15,
+    coverageStaleS: c.coverageStaleS ?? 35, // fix older than this = not on track
+    idleSpeedMs: c.idleSpeedMs ?? 1.5, // below this = not running (walking ~1.4)
     zones: event.zones || [],
   };
 }

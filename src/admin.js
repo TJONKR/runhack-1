@@ -194,6 +194,28 @@ router.get('/events/:slug/teams/:teamId/laps', async (req, res) => {
   res.json(rows);
 });
 
+// Idle infractions ("nobody sits down" violations) for dispute review.
+router.get('/events/:slug/teams/:teamId/infractions', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, started_at, ended_at, seconds, dismissed, prompt_count, prompt_log
+       FROM infractions
+      WHERE team_id = $1 AND event_id = (SELECT id FROM events WHERE slug = $2)
+      ORDER BY started_at DESC LIMIT 100`,
+    [req.params.teamId, req.params.slug]
+  );
+  res.json(rows);
+});
+
+// Dismiss (or reinstate) an infraction — e.g. GPS dropout, agreed dispute.
+router.patch('/infractions/:id(\\d+)', async (req, res) => {
+  const { rows } = await pool.query(
+    'UPDATE infractions SET dismissed = $1 WHERE id = $2 RETURNING *',
+    [!!req.body.dismissed, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'no such infraction' });
+  res.json(rows[0]);
+});
+
 // Manually credit laps to a team (attributed to the active runner if any).
 router.post('/events/:slug/teams/:teamId/laps', async (req, res) => {
   const ev = await pool.query('SELECT id FROM events WHERE slug = $1', [req.params.slug]);
