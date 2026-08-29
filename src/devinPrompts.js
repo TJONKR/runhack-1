@@ -1,7 +1,6 @@
 import { eventConfig, eventStatus, pool } from './db.js';
 
 const DEVIN_API = process.env.DEVIN_API_BASE ?? 'https://api.devin.ai';
-const GAP_LOOKBACK_MS = 10 * 60 * 1000;
 
 async function devinFetch(apiKey, path, params = {}) {
   const query = new URLSearchParams(params);
@@ -97,12 +96,7 @@ export function matchPromptsToGaps(prompts, gaps, existingLog = []) {
   return matches;
 }
 
-async function pollTeamPrompts(team, gaps) {
-  const starts = gaps
-    .map((gap) => timestampMs(gap.started_at))
-    .filter((at) => at != null);
-  if (!starts.length) return;
-  const sinceMs = Math.min(Date.now() - GAP_LOOKBACK_MS, ...starts);
+async function pollTeamPrompts(team, gaps, sinceMs) {
   const sessions = await listSessions(team.devin_api_key, team.devin_org_id, sinceMs);
   const prompts = [];
   const sessionList = sessions.filter((session) => session?.session_id);
@@ -153,7 +147,14 @@ async function pollOnce() {
       );
       if (!gaps.length) continue;
       try {
-        await pollTeamPrompts(team, gaps);
+        const eventStart = timestampMs(event.start_at);
+        const now = new Date();
+        const sinceMs = eventStart ?? Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate()
+        );
+        await pollTeamPrompts(team, gaps, sinceMs);
       } catch (err) {
         console.error(`devin prompt poll team ${team.id}:`, err.message);
       }
