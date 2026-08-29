@@ -106,6 +106,10 @@ export async function initDb() {
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS last_commit_msg text;
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS last_commit_author text;
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS committers integer;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_org_id text;
+    ALTER TABLE teams ADD COLUMN IF NOT EXISTS devin_api_key text;
+    ALTER TABLE infractions ADD COLUMN IF NOT EXISTS prompt_count integer NOT NULL DEFAULT 0;
+    ALTER TABLE infractions ADD COLUMN IF NOT EXISTS prompt_log jsonb NOT NULL DEFAULT '[]';
     ALTER TABLE laps ADD COLUMN IF NOT EXISTS manual boolean NOT NULL DEFAULT false;
     ALTER TABLE laps ALTER COLUMN member_id DROP NOT NULL;
     ALTER TABLE laps ADD COLUMN IF NOT EXISTS entry_seconds real;
@@ -194,8 +198,8 @@ export function eventConfig(event) {
     // All three are recorded regardless; this only picks the official one.
     officialTiming: c.officialTiming ?? 'exit_entry',
     // "nobody sits down" monitor: a team with no device moving at running
-    // speed for longer than idleGraceS gets an infraction logged. Penalties
-    // are tallied from the log at the end (count + total idle seconds).
+    // speed for longer than idleGraceS gets a gap logged. Devin prompts during
+    // that gap are counted separately as prompt-backed infractions.
     idleMonitor: c.idleMonitor ?? true,
     idleGraceS: c.idleGraceS ?? 15,
     coverageStaleS: c.coverageStaleS ?? 35, // fix older than this = not on track

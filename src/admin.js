@@ -197,7 +197,7 @@ router.get('/events/:slug/teams/:teamId/laps', async (req, res) => {
 // Idle infractions ("nobody sits down" violations) for dispute review.
 router.get('/events/:slug/teams/:teamId/infractions', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT id, started_at, ended_at, seconds, dismissed
+    `SELECT id, started_at, ended_at, seconds, dismissed, prompt_count, prompt_log
        FROM infractions
       WHERE team_id = $1 AND event_id = (SELECT id FROM events WHERE slug = $2)
       ORDER BY started_at DESC LIMIT 100`,

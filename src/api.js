@@ -277,7 +277,8 @@ router.get('/:slug/board', async (req, res) => {
             l.avg_s AS avg_lap_s,
             COALESCE(l.valid, 0) AS valid_laps, COALESCE(l.invalid, 0) AS invalid_laps,
             COALESCE(l.valid_then, 0) AS valid_laps_then,
-            COALESCE(inf.n, 0) AS infractions, COALESCE(inf.idle_s, 0) AS idle_s,
+            COALESCE(inf.n, 0) AS infractions, COALESCE(inf.prompts, 0) AS prompts,
+            COALESCE(inf.idle_s, 0) AS idle_s,
             COALESCE(inf.open_n, 0) > 0 AS idle_now
        FROM teams t
        LEFT JOIN devices ad ON ad.id = t.active_device_id
@@ -291,7 +292,9 @@ router.get('/:slug/board', async (req, res) => {
            FROM laps WHERE event_id = $1 GROUP BY team_id
        ) l ON l.team_id = t.id
        LEFT JOIN (
-         SELECT team_id, count(*) AS n, count(*) FILTER (WHERE ended_at IS NULL) AS open_n,
+         SELECT team_id, count(*) FILTER (WHERE prompt_count > 0) AS n,
+                sum(prompt_count) AS prompts,
+                count(*) FILTER (WHERE ended_at IS NULL) AS open_n,
                 coalesce(sum(coalesce(seconds, extract(epoch FROM now() - started_at))), 0) AS idle_s
            FROM infractions WHERE event_id = $1 AND NOT dismissed GROUP BY team_id
        ) inf ON inf.team_id = t.id
@@ -359,6 +362,7 @@ router.get('/:slug/board', async (req, res) => {
             : null,
         lastPingAgoS: lastFixAgoS,
         infractions: Number(t.infractions),
+        promptsWhileIdle: Number(t.prompts),
         idleSeconds: Math.round(Number(t.idle_s)),
         idleNow: t.idle_now,
       };

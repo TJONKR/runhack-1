@@ -1,12 +1,10 @@
 import { pool, eventConfig, eventStatus } from './db.js';
 
-// "NOBODY SITS DOWN" enforcement: at every moment each team must have someone
+// "NOBODY SITS DOWN" monitoring: at every moment each team should have someone
 // out running. A team counts as covered when any of its devices delivered a
 // recent fix at running speed; when coverage lapses for longer than the grace
-// window (default 15s) an infraction opens, and it closes when someone runs
-// again. Infractions are recorded per team with start/end so penalties can be
-// tallied at the end of the event (count and total idle seconds are both on
-// the board API — the penalty formula is the organisers' call).
+// window (default 15s) a durable gap is logged, and it closes when someone
+// runs again. Devin prompts during gaps are counted by devinPrompts.js.
 
 /** A device covers its team when its last fix is fresh and at running speed.
  *  A fix without speed (some trackers omit it) counts while fresh — better to
@@ -19,8 +17,7 @@ export function deviceCovers(lastFix, nowMs, cfg) {
 
 /** Pure per-team step. state: { lastCoveredAt, openSince } (ms epochs).
  *  Returns { state, open, close } where open/close carry the ms timestamps
- *  at which an infraction starts (backdated to when the grace ran out) or
- *  ends. */
+ *  at which a gap starts (backdated to when the grace ran out) or ends. */
 export function stepTeam(state, covered, nowMs, cfg) {
   const s = { ...state };
   let open = null;

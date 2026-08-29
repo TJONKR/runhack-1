@@ -58,13 +58,19 @@ Every 5s the server checks each team: is **anyone** on the team moving at
 running speed? A device covers its team when its last fix is fresh
 (`coverageStaleS`, default 35s) and at running speed (`idleSpeedMs`, default
 1.5 m/s; a fix without speed counts while fresh). When no device covers the
-team for longer than `idleGraceS` (default 15s) an **infraction** opens —
-backdated to the moment the grace ran out — and closes when someone runs
-again. Infractions only accrue while the event is `live`.
+team for longer than `idleGraceS` (default 15s), a gap is logged — backdated
+to the moment the grace ran out — and it closes when someone runs again.
+Being stationary alone is not an infraction. A new Devin user prompt sent
+during a gap is what makes that gap a prompt-backed infraction. Prompt polling
+runs every 60s while the event is `live`.
 
-The board shows per team: infraction count, total idle seconds, and a live
-"SITTING" flash while a gap is open. Penalties are the organisers' call —
-the raw log (start/end/seconds per infraction) is kept for the final tally.
+The board shows per team: prompt-backed infraction count, total prompts sent
+while idle, total idle seconds, and a live "SITTING" flash while a gap is open.
+Teams without a Devin API key still get gap logs, but their gaps cannot become
+prompt-backed penalties. The key can be supplied through the first-runner join
+flow or the admin configuration.
+Penalties are the organisers' call — the raw gap log (start/end/seconds and
+prompt timestamps/session IDs) is kept for the final tally.
 Admin: `GET /api/admin/events/{slug}/teams/{id}/infractions` to review,
 `PATCH /api/admin/infractions/{id}` `{"dismissed":true}` to void one
 (GPS dropout, agreed dispute); dismissed infractions leave the board totals.

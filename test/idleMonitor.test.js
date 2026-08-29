@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { deviceCovers, stepTeam } from '../src/idleMonitor.js';
+import { matchPromptsToGaps } from '../src/devinPrompts.js';
 
 const cfg = { idleGraceS: 15, coverageStaleS: 35, idleSpeedMs: 1.5 };
 const T0 = 1_000_000_000_000;
@@ -46,4 +47,22 @@ test('first sighting arms without punishing', () => {
   // and only opens once grace elapses from that arming point
   const r2 = stepTeam(r.state, false, T0 + 16_000, cfg);
   assert.equal(r2.open, T0 + 15_000);
+});
+
+test('prompt inside a backdated gap counts, while one before the gap does not', () => {
+  const gap = { started_at: T0 + 15_000, ended_at: T0 + 40_000, prompt_log: [] };
+  const matches = matchPromptsToGaps([
+    { at: T0 + 10_000, session_id: 's1' },
+    { at: T0 + 16_000, session_id: 's1' },
+  ], [gap]);
+  assert.deepEqual(matches, [{ at: new Date(T0 + 16_000).toISOString(), session_id: 's1' }]);
+});
+
+test('duplicate prompt/session pairs are deduplicated', () => {
+  const gap = { started_at: T0, ended_at: T0 + 30_000 };
+  const prompt = { at: T0 + 5_000, session_id: 's1' };
+  assert.equal(matchPromptsToGaps([prompt, prompt], [gap]).length, 1);
+  assert.equal(matchPromptsToGaps([prompt], [gap], [
+    { at: new Date(T0 + 5_000).toISOString(), session_id: 's1' },
+  ]).length, 0);
 });
